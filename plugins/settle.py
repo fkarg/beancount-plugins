@@ -37,9 +37,9 @@ def settlement_date(entries, options_map, config):
     for index, entry in enumerate(entries):
         if isinstance(entry, data.Transaction):
             for p_index, posting in enumerate(entry.postings):
-                if posting.meta and 'settlement-date' in posting.meta:
+                if posting.meta and 'settle' in posting.meta:
                     postings = entry.postings
-                    s_date = posting.meta['settlement-date']
+                    s_date = posting.meta['settle']
                     link = 'settle-{}'.format(compare.hash_entry(entry))
                     original_account = posting.account
                     entry.postings[p_index] = entry.postings[p_index]._replace(account=config)
@@ -65,5 +65,4 @@ def settlement_date(entries, options_map, config):
                         entry.tags, set([link]), postings))
 
                     break
-
     return entries, errors
