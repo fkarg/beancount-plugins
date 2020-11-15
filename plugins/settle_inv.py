@@ -8,20 +8,19 @@ Example:
     plugin "plugins.settle_inv" "Assets:PayPal"
 
     2017-04-03 * "" ""
-        Assets:SPK              -100.00 EUR
+        Assets:Checkings        -100.00 EUR
             paypal: 2017-04-01
         Expenses:Something
 
     ; becomes
 
     2017-04-01 * "" "Doing some saving transfers" ^settle-43be1c
-        Assets:PayPal       -100.00 USD
+        Assets:PayPal           -100.00 EUR
         Expenses:Something
-            settle: 2017-04-03
 
     2017-04-03 * "" "Settle: Doing some saving transfers" ^settle-43be1c
-        Assets:SPK              -100.00 EUR
-        Assets:PayPal            100.00 USD
+        Assets:Checkings        -100.00 EUR
+        Assets:PayPal            100.00 EUR
 """
 
 from dateutil.parser import parse
@@ -43,7 +42,7 @@ def settlement_date(entries, options_map, config):
                 if posting.meta and 'paypal' in posting.meta:
 
                     s_date = entry.date
-                    link = 'paypal-{}'.format(compare.hash_entry(entry))
+                    link = 'paypal-{}'.format(compare.hash_entry(entry)[:12])
                     original_account = posting.account
 
                     m_links = set(entry.links).union([link]) \
@@ -56,6 +55,13 @@ def settlement_date(entries, options_map, config):
 
                     new_posting = entry.postings[p_index]
                     new_posting = new_posting._replace(meta=dict())
+
+                    # remove unintended additioal meta-fields
+                    # (which could trigger additional plugins)
+                    s_meta = dict()
+                    s_meta['filename'] = entry.meta['filename']
+                    s_meta['lineno'] = entry.meta['lineno']
+                    s_meta['__tolerances__'] = entry.meta['__tolerances__']
 
                     s_postings = [
                         new_posting,
@@ -70,7 +76,7 @@ def settlement_date(entries, options_map, config):
                         entry.flag, '', entry.narration,
                         entry.tags, m_links, m_postings)
 
-                    settling_transaction = data.Transaction(entry.meta, s_date,
+                    settling_transaction = data.Transaction(s_meta, s_date,
                         entry.flag, '', 'Settle: {}'.format(entry.narration),
                         entry.tags, set([link]), s_postings)
 

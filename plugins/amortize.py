@@ -20,13 +20,14 @@
 
 import math
 
+from beancount.core import compare
 from beancount.core.data import Transaction
 from beancount.core.amount import Amount
 
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-__plugins__ = ['amortize']
+__plugins__ = ['amortize', 'prepaid', 'electronics']
 
 
 
@@ -46,31 +47,31 @@ def amortize(entries, unused_options_map):
     This plugin will convert the following transactions
 
         2017-06-01 * "Pay car insurance"
-            Assets:Bank:Checking               -600.00 USD
+            Assets:Bank:Checking               -600.00 EUR
             Assets:Prepaid-Expenses
 
         2017-06-01 * "Amortize car insurance over six months"
             amortize_months: 3
-            Assets:Prepaid-Expenses            -600.00 USD
+            Assets:Prepaid-Expenses            -600.00 EUR
             Expenses:Insurance:Auto
 
     into the following transactions over six months:
 
         2017/06/01 * Pay car insurance
-            Assets:Bank:Checking               -600.00 USD
-            Assets:Prepaid-Expenses             600.00 USD
+            Assets:Bank:Checking               -600.00 EUR
+            Assets:Prepaid-Expenses             600.00 EUR
 
         2017/06/01 * Amortize car insurance over six months
-            Assets:Prepaid-Expenses            -200.00 USD
-            Expenses:Insurance:Auto             200.00 USD
+            Assets:Prepaid-Expenses            -200.00 EUR
+            Expenses:Insurance:Auto             200.00 EUR
 
         2017/07/01 * Amortize car insurance over six months
-            Assets:Prepaid-Expenses            -200.00 USD
-            Expenses:Insurance:Auto             200.00 USD
+            Assets:Prepaid-Expenses            -200.00 EUR
+            Expenses:Insurance:Auto             200.00 EUR
 
         2017/08/01 * Amortize car insurance over six months
-            Assets:Prepaid-Expenses            -200.00 USD
-            Expenses:Insurance:Auto             200.00 USD
+            Assets:Prepaid-Expenses            -200.00 EUR
+            Expenses:Insurance:Auto             200.00 EUR
 
     Note that transactions are not included past today's date.  For example,
     if the above transactions are processed on a date of 2017/07/25, the
@@ -89,12 +90,143 @@ def amortize(entries, unused_options_map):
 
     return new_entries, errors
 
+
+def prepaid(entries, unused_options_map):
+    """ Amortize prepaid expenses. Transforms one transaction in multiple.
+    Example Use:
+
+        2020-01-01 * "Pay Car Insurance" ^car
+          prepaid_months: 6
+          Assets:Checking           -600 EUR
+          Expenses:Car:Insurance
+
+    will be transformed into multiple statements, up until the current day:
+        (assuming today is 2020-04-02)
+
+        2020-01-01 * "Car Insurance" ^car ^prepaid-43be1c
+          Assets:Checking           -600 EUR
+          Assets:PrepaidExpenses
+
+        2020-02-01 * "Car Insurance" ^prepaid-43be1c
+          Assets:PrepaidExpenses    -100 EUR
+          Expenses:Car:Insurance
+
+        2020-03-01 * "Car Insurance" ^prepaid-43be1c
+          Assets:PrepaidExpenses    -100 EUR
+          Expenses:Car:Insurance
+
+        2020-04-01 * "Car Insurance" ^prepaid-43be1c
+          Assets:PrepaidExpenses    -100 EUR
+          Expenses:Car:Insurance
+
+    Make sure you have an Assets:PrepaidExpenses account.
+    """
+    new_entries = []
+    errors = []
+
+    for entry in entries:
+        if isinstance(entry, Transaction) and 'prepaid_months' in entry.meta:
+            new_entries.extend(
+                    prepaid_transactions(
+                        entry,
+                        "Assets:PrepaidExpenses",
+                        "prepaid",
+                        "prepaid_months")
+                    )
+        else:
+            # Always replicate the existing entries - unless 'prepaid_months'
+            # is in the metadata
+            new_entries.append(entry)
+
+    return new_entries, errors
+
+
+def electronics(entries, unused_options_map):
+    new_entries = []
+    errors = []
+
+    for entry in entries:
+        if isinstance(entry, Transaction) and 'lifetime_months' in entry.meta:
+            new_entries.extend(
+                    prepaid_transactions(
+                        entry,
+                        "Assets:Electronics",
+                        "electronic",
+                        "lifetime_months")
+                    )
+        else:
+            # Always replicate the existing entries - unless 'prepaid_months'
+            # is in the metadata
+            new_entries.append(entry)
+
+    return new_entries, errors
+
+
+
+def prepaid_transactions(entry, prepaid_acc, link_pre, period_field):
+    if len(entry.postings) != 2:
+        raise ValueError('Amortized transactions must have exactly two postings.')
+
+    new_entries = []
+
+    assets_account = entry.postings[0].account
+    expenses_account = entry.postings[1].account
+    periods = entry.meta[period_field]
+    link = '{}-{}'.format(link_pre, compare.hash_entry(entry)[:12])
+    links = set(entry.links).union([link]) \
+            if entry.links else set([link])
+    amount = abs(entry.postings[0].units.number)
+    currency = entry.postings[0].units.currency
+
+    monthly_amounts = split_amount(amount, periods)
+
+
+    initial_postings = entry.postings
+    initial_postings[1] = initial_postings[1]._replace(account=prepaid_acc)
+
+    initial_transaction = Transaction(entry.meta, entry.date, entry.flag,
+            '', entry.narration, entry.tags, links, initial_postings)
+
+    new_entries.append(initial_transaction)
+
+    new_meta = dict(entry.meta)
+    del new_meta[period_field]
+
+    for (n_month, monthly_number) in enumerate(monthly_amounts):
+        new_postings = []
+        for posting in entry.postings:
+            new_monthly_number = monthly_number
+            if posting.units.number < 0:
+                new_monthly_number = -monthly_number
+            new_posting = posting._replace(units=Amount(number=new_monthly_number,
+                                                        currency=currency))
+            new_postings.append(new_posting)
+
+        new_postings[0] = new_postings[0]._replace(account=prepaid_acc)
+        new_postings[1] = new_postings[1]._replace(account=expenses_account)
+        new_meta[period_field + '_remaining'] = periods - n_month - 1
+        new_entry = entry._replace(links=set([link]))
+        new_entry = new_entry._replace(meta=dict(new_meta))
+        new_entry = new_entry._replace(postings=new_postings)
+        new_entry = new_entry._replace(narration='Depreciate: {}'.format(entry.narration))
+        new_entry = new_entry._replace(date=entry.date + relativedelta(months=(1 + n_month)))
+                        # start depreciation one month later
+        if new_entry.date <= date.today():
+            new_entries.append(new_entry)
+        else:
+            break
+    return new_entries
+
+
+
+
 def split_amount(amount, periods):
     if periods == 1:
         return [ amount ]
     amount_this_period = amount/periods
     amount_this_period = amount_this_period.quantize(amount)
     return [ amount_this_period ] + split_amount(amount-amount_this_period, periods-1)
+
 
 def amortize_transaction(entry):
 
@@ -104,7 +236,9 @@ def amortize_transaction(entry):
     new_entries = []
 
     original_postings = entry.postings
-
+    link = 'amortize-{}'.format(compare.hash_entry(entry)[:12])
+    links = set(entry.links).union([link]) \
+            if entry.links else set([link])
     periods = entry.meta['amortize_months']
 
     amount = abs(entry.postings[0].units.number)
@@ -123,6 +257,7 @@ def amortize_transaction(entry):
             new_postings.append(new_posting)
 
         new_entry = entry._replace(postings=new_postings)
+        new_entry = new_entry._replace(links=links)
         new_entry = new_entry._replace(date=entry.date + relativedelta(months=(1 + n_month))) # start depreciation one month later
         if new_entry.date <= date.today():
             new_entries.append(new_entry)
