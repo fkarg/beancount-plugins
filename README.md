@@ -1,10 +1,48 @@
 # beancount-plugins
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+---
 A collection of plugins I adapted for personal use with
 [beancount](https://github.com/beancount/beancount).
 
-## `amortize`
 
-### `amortize`
+
+```
+main.bean
+plugins/
+├── amortize.py
+│   ├── amortize (function)
+│   ├── prepaid (function)
+│   └── electronics (function)
+├── settle_inv.py
+│   └── settle_inv (function)
+└── settle.py
+    └── settle (function)
+```
+
+The functionality is split across three plugins and five functions, additional
+auxiliary functions used by multiple plugin-functions exist.
+
+I recommend activating `settle`-plugins prior to `amortize` for everything to
+function properly. As in; my `main.bean` looks like this:
+
+```
+...
+
+* Plugins
+option "insert_pythonpath" "True" ; for importing plugins
+plugin "plugins.settle" "Assets:Extern:Transit"    ; Transactions in transit
+plugin "plugins.settle_inv" "Assets:PayPal"        ; settle PayPal payments later
+plugin "plugins.amortize"   ; amortizing transactions over longer durations
+
+* Includes
+include "transactions/all.bean"   ; take in all transactions
+...
+```
+
+
+## Plugin `amortize`
+
+### Function `amortize`
 ```
 Repeat a transaction based on metadata.
 
@@ -51,7 +89,7 @@ if the above transactions are processed on a date of 2017/07/25, the
 transaction dated 2017/08/01 is not included.
 ```
 
-### `prepaid`
+### Function `prepaid`
 ```
 Amortize prepaid expenses. Transforms one transaction in multiple.
 Example Use:
@@ -87,7 +125,7 @@ will be transformed into multiple statements, up until the current day:
 Make sure you have an Assets:PrepaidExpenses account.
 ```
 
-### `electronics`
+### Function `electronics`
 ```
 Amortize cost of electronics over their lifetime. Transforms one
 transaction in multiple.
@@ -124,7 +162,7 @@ will be transformed into multiple statements, up until the current day:
 Make sure you have an Assets:Electronics account.
 ```
 
-## `settle`
+## Plugin `settle`
 ```
 Beancount plugin to split transactions which are in transit.
 
@@ -155,7 +193,7 @@ Example:
         Assets:Savings:JP        100.00 USD
 ```
 
-## `settle_inv`
+## Plugin `settle_inv`
 ```
 Beancount plugin to split transactions which are in transit.
 
