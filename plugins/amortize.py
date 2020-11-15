@@ -1,4 +1,7 @@
 # Copyright (c) 2017 Cary Kempston
+# Source: https://gist.github.com/cdjk/0b8da9e2cc2dee5f3887ab5160970faa
+# Modified by Felix Karg <f.karg10@gmail.com> 2020
+#   Added: functions 'prepaid', 'electronics', and 'prepaid_transactions'
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -104,18 +107,22 @@ def prepaid(entries, unused_options_map):
         (assuming today is 2020-04-02)
 
         2020-01-01 * "Car Insurance" ^car ^prepaid-43be1c
+          prepaid_months: 6
           Assets:Checking           -600 EUR
           Assets:PrepaidExpenses
 
         2020-02-01 * "Car Insurance" ^prepaid-43be1c
+          prepaid_months_remaining: 5
           Assets:PrepaidExpenses    -100 EUR
           Expenses:Car:Insurance
 
         2020-03-01 * "Car Insurance" ^prepaid-43be1c
+          prepaid_months_remaining: 4
           Assets:PrepaidExpenses    -100 EUR
           Expenses:Car:Insurance
 
         2020-04-01 * "Car Insurance" ^prepaid-43be1c
+          prepaid_months_remaining: 3
           Assets:PrepaidExpenses    -100 EUR
           Expenses:Car:Insurance
 
@@ -142,6 +149,40 @@ def prepaid(entries, unused_options_map):
 
 
 def electronics(entries, unused_options_map):
+    """ Amortize cost of electronics over their lifetime. Transforms one
+    transaction in multiple.
+    Example Use:
+
+        2020-01-01 * "Buy new Phone" ^phone
+          lifetime_months: 12
+          Assets:Checking           -600 EUR
+          Expenses:Phone
+
+    will be transformed into multiple statements, up until the current day:
+        (assuming today is 2020-04-02)
+
+        2020-01-01 * "Buy new Phone" ^phone ^electronic-43be1c
+          lifetime_months: 12
+          Assets:Checking           -600 EUR
+          Assets:Electronics
+
+        2020-02-01 * "Buy new Phone" ^electronic-43be1c
+          lifetime_months_remaining: 11
+          Assets:Electronics         -50 EUR
+          Expenses:Phone
+
+        2020-03-01 * "Buy new Phone" ^electronic-43be1c
+          lifetime_months_remaining: 10
+          Assets:Electronics         -50 EUR
+          Expenses:Phone
+
+        2020-04-01 * "Buy new Phone" ^electronic-43be1c
+          lifetime_months_remaining: 9
+          Assets:Electronics         -50 EUR
+          Expenses:Phone
+
+    Make sure you have an Assets:Electronics account.
+    """
     new_entries = []
     errors = []
 

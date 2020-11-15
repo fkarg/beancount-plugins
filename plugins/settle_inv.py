@@ -1,24 +1,28 @@
 """Beancount plugin to split transactions which are in transit.
 
-It looks through all Transaction entries with the `settlement-date`-metadata on
+Source: https://github.com/beancount/fava-plugins/pull/3/files
+Author: Dominik Aumayr (github.com/aumayr)
+Modified by Felix Karg (github.com/fkarg) 2020
+
+It looks through all Transaction entries with the `paypal`-metadata on
 one of it's postings and splits those into two transactions.
 
 Example:
 
     plugin "plugins.settle_inv" "Assets:PayPal"
 
-    2017-04-03 * "" ""
+    2017-04-03 * "Paid for something with PayPal" #tag ^link
         Assets:Checkings        -100.00 EUR
             paypal: 2017-04-01
         Expenses:Something
 
     ; becomes
 
-    2017-04-01 * "" "Doing some saving transfers" ^settle-43be1c
+    2017-04-01 * "Paid for something with PayPal" #tag ^link ^settle-43be1c
         Assets:PayPal           -100.00 EUR
         Expenses:Something
 
-    2017-04-03 * "" "Settle: Doing some saving transfers" ^settle-43be1c
+    2017-04-03 * "Settle: Paid for something with PayPal" #tag ^link ^settle-43be1c
         Assets:Checkings        -100.00 EUR
         Assets:PayPal            100.00 EUR
 """
@@ -27,11 +31,10 @@ from dateutil.parser import parse
 
 from beancount.core import data, compare
 
-__plugins__ = ['settlement_date']
+__plugins__ = ['settle_paypal']
 
 
-def settlement_date(entries, options_map, config):
-    # config = PayPal account
+def settle_paypal(entries, options_map, config):
     new_entries = []
     errors = []
 

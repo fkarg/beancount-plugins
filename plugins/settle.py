@@ -1,5 +1,8 @@
 """Beancount plugin to split transactions which are in transit.
 
+Source: https://github.com/beancount/fava-plugins/pull/3/files
+Author: Dominik Aumayr (github.com/aumayr)
+
 It looks through all Transaction entries with the `settlement-date`-metadata on
 one of it's postings and splits those into two transactions.
 
