@@ -30,9 +30,7 @@ from beancount.core.amount import Amount
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-__plugins__ = ['amortize', 'prepaid', 'electronics']
-
-
+__plugins__ = ["amortize", "prepaid", "electronics"]
 
 
 def amortize(entries, unused_options_map):
@@ -84,7 +82,7 @@ def amortize(entries, unused_options_map):
     errors = []
 
     for entry in entries:
-        if isinstance(entry, Transaction) and 'amortize_months' in entry.meta:
+        if isinstance(entry, Transaction) and "amortize_months" in entry.meta:
             new_entries.extend(amortize_transaction(entry))
         else:
             # Always replicate the existing entries - unless 'amortize_months'
@@ -132,14 +130,12 @@ def prepaid(entries, unused_options_map):
     errors = []
 
     for entry in entries:
-        if isinstance(entry, Transaction) and 'prepaid_months' in entry.meta:
+        if isinstance(entry, Transaction) and "prepaid_months" in entry.meta:
             new_entries.extend(
-                    prepaid_transactions(
-                        entry,
-                        "Assets:PrepaidExpenses",
-                        "prepaid",
-                        "prepaid_months")
-                    )
+                prepaid_transactions(
+                    entry, "Assets:PrepaidExpenses", "prepaid", "prepaid_months"
+                )
+            )
         else:
             # Always replicate the existing entries - unless 'prepaid_months'
             # is in the metadata
@@ -187,14 +183,12 @@ def electronics(entries, unused_options_map):
     errors = []
 
     for entry in entries:
-        if isinstance(entry, Transaction) and 'lifetime_months' in entry.meta:
+        if isinstance(entry, Transaction) and "lifetime_months" in entry.meta:
             new_entries.extend(
-                    prepaid_transactions(
-                        entry,
-                        "Assets:Electronics",
-                        "electronic",
-                        "lifetime_months")
-                    )
+                prepaid_transactions(
+                    entry, "Assets:Electronics", "electronic", "lifetime_months"
+                )
+            )
         else:
             # Always replicate the existing entries - unless 'prepaid_months'
             # is in the metadata
@@ -203,30 +197,35 @@ def electronics(entries, unused_options_map):
     return new_entries, errors
 
 
-
 def prepaid_transactions(entry, prepaid_acc, link_pre, period_field):
     if len(entry.postings) != 2:
-        raise ValueError('Amortized transactions must have exactly two postings.')
+        raise ValueError("Amortized transactions must have exactly two postings.")
 
     new_entries = []
 
     assets_account = entry.postings[0].account
     expenses_account = entry.postings[1].account
     periods = entry.meta[period_field]
-    link = '{}-{}'.format(link_pre, compare.hash_entry(entry)[:12])
-    links = set(entry.links).union([link]) \
-            if entry.links else set([link])
+    link = "{}-{}".format(link_pre, compare.hash_entry(entry)[:12])
+    links = set(entry.links).union([link]) if entry.links else set([link])
     amount = abs(entry.postings[0].units.number)
     currency = entry.postings[0].units.currency
 
     monthly_amounts = split_amount(amount, periods)
 
-
     initial_postings = entry.postings
     initial_postings[1] = initial_postings[1]._replace(account=prepaid_acc)
 
-    initial_transaction = Transaction(entry.meta, entry.date, entry.flag,
-            '', entry.narration, entry.tags, links, initial_postings)
+    initial_transaction = Transaction(
+        entry.meta,
+        entry.date,
+        entry.flag,
+        "",
+        entry.narration,
+        entry.tags,
+        links,
+        initial_postings,
+    )
 
     new_entries.append(initial_transaction)
 
@@ -239,19 +238,24 @@ def prepaid_transactions(entry, prepaid_acc, link_pre, period_field):
             new_monthly_number = monthly_number
             if posting.units.number < 0:
                 new_monthly_number = -monthly_number
-            new_posting = posting._replace(units=Amount(number=new_monthly_number,
-                                                        currency=currency))
+            new_posting = posting._replace(
+                units=Amount(number=new_monthly_number, currency=currency)
+            )
             new_postings.append(new_posting)
 
         new_postings[0] = new_postings[0]._replace(account=prepaid_acc)
         new_postings[1] = new_postings[1]._replace(account=expenses_account)
-        new_meta[period_field + '_remaining'] = periods - n_month - 1
+        new_meta[period_field + "_remaining"] = periods - n_month - 1
         new_entry = entry._replace(links=set([link]))
         new_entry = new_entry._replace(meta=dict(new_meta))
         new_entry = new_entry._replace(postings=new_postings)
-        new_entry = new_entry._replace(narration='Depreciate: {}'.format(entry.narration))
-        new_entry = new_entry._replace(date=entry.date + relativedelta(months=(1 + n_month)))
-                        # start depreciation one month later
+        new_entry = new_entry._replace(
+            narration="Depreciate: {}".format(entry.narration)
+        )
+        new_entry = new_entry._replace(
+            date=entry.date + relativedelta(months=(1 + n_month))
+        )
+        # start depreciation one month later
         if new_entry.date <= date.today():
             new_entries.append(new_entry)
         else:
@@ -259,28 +263,25 @@ def prepaid_transactions(entry, prepaid_acc, link_pre, period_field):
     return new_entries
 
 
-
-
 def split_amount(amount, periods):
     if periods == 1:
-        return [ amount ]
-    amount_this_period = amount/periods
+        return [amount]
+    amount_this_period = amount / periods
     amount_this_period = amount_this_period.quantize(amount)
-    return [ amount_this_period ] + split_amount(amount-amount_this_period, periods-1)
+    return [amount_this_period] + split_amount(amount - amount_this_period, periods - 1)
 
 
 def amortize_transaction(entry):
 
     if len(entry.postings) != 2:
-        raise ValueError('Amortized transactions must have exactly two postings.')
+        raise ValueError("Amortized transactions must have exactly two postings.")
 
     new_entries = []
 
     original_postings = entry.postings
-    link = 'amortize-{}'.format(compare.hash_entry(entry)[:12])
-    links = set(entry.links).union([link]) \
-            if entry.links else set([link])
-    periods = entry.meta['amortize_months']
+    link = "amortize-{}".format(compare.hash_entry(entry)[:12])
+    links = set(entry.links).union([link]) if entry.links else set([link])
+    periods = entry.meta["amortize_months"]
 
     amount = abs(entry.postings[0].units.number)
     currency = entry.postings[0].units.currency
@@ -293,13 +294,16 @@ def amortize_transaction(entry):
             new_monthly_number = monthly_number
             if posting.units.number < 0:
                 new_monthly_number = -monthly_number
-            new_posting = posting._replace(units=Amount(number=new_monthly_number,
-                                                        currency=currency))
+            new_posting = posting._replace(
+                units=Amount(number=new_monthly_number, currency=currency)
+            )
             new_postings.append(new_posting)
 
         new_entry = entry._replace(postings=new_postings)
         new_entry = new_entry._replace(links=links)
-        new_entry = new_entry._replace(date=entry.date + relativedelta(months=(1 + n_month))) # start depreciation one month later
+        new_entry = new_entry._replace(
+            date=entry.date + relativedelta(months=(1 + n_month))
+        )  # start depreciation one month later
         if new_entry.date <= date.today():
             new_entries.append(new_entry)
     return new_entries
