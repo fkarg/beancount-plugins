@@ -25,6 +25,24 @@ Example:
     2017-04-03 * "" "Settle: Doing some saving transfers" ^settle-43be1c
         Assets:Savings:Transfer -100.00 USD
         Assets:Savings:JP        100.00 USD
+
+
+    ; also; in case of settling negative parts later:
+    2017-04-01 * "" ""
+        Assets:Savings:US               -100.00 USD
+            settle: 2017-04-03
+        Assets:Savings:JP
+
+    ; becomes
+
+    2017-04-01 * "" "Doing some saving transfers" ^settle-43be1c
+        Liabilities:AccountsPayable     -100.00 USD
+            settle: 2017-04-03
+        Assets:Savings:JP                100.00 USD
+
+    2017-04-03 * "" "Settle: Doing some saving transfers" ^settle-43be1c
+        Assets:Savings:US               -100.00 USD
+        Liabilities:AccoutsPayable       100.00 USD
 """
 
 from dateutil.parser import parse
@@ -41,10 +59,14 @@ def settlement_date(entries, options_map, config):
         if isinstance(entry, data.Transaction):
             for p_index, posting in enumerate(entry.postings):
                 if posting.meta and "settle" in posting.meta:
+                    save_config = None
                     postings = entry.postings
                     s_date = posting.meta["settle"]
                     link = "settle-{}".format(compare.hash_entry(entry))
                     original_account = posting.account
+                    if postings[p_index].units.number < 0:
+                        save_config = config
+                        config = "Liabilities:AccountsPayable"
                     entry.postings[p_index] = entry.postings[p_index]._replace(
                         account=config
                     )
@@ -67,6 +89,9 @@ def settlement_date(entries, options_map, config):
                     )
                     postings[1] = postings[1]._replace(account=original_account)
 
+                    if save_config:
+                        postings.reverse()
+
                     entries.append(
                         data.Transaction(
                             entry.meta,
@@ -80,5 +105,6 @@ def settlement_date(entries, options_map, config):
                         )
                     )
 
+                    config = save_config if save_config else config
                     break
     return entries, errors
