@@ -272,6 +272,10 @@ def split_amount(amount, periods):
 
 
 def amortize_transaction(entry):
+    period_field = "amortize_months"
+
+    new_meta = dict(entry.meta)
+    del new_meta[period_field]
 
     if len(entry.postings) != 2:
         raise ValueError("Amortized transactions must have exactly two postings.")
@@ -281,7 +285,7 @@ def amortize_transaction(entry):
     original_postings = entry.postings
     link = "amortize-{}".format(compare.hash_entry(entry)[:12])
     links = set(entry.links).union([link]) if entry.links else set([link])
-    periods = entry.meta["amortize_months"]
+    periods = entry.meta[period_field]
 
     amount = abs(entry.postings[0].units.number)
     currency = entry.postings[0].units.currency
@@ -300,6 +304,8 @@ def amortize_transaction(entry):
             new_postings.append(new_posting)
 
         new_entry = entry._replace(postings=new_postings)
+        new_meta[period_field + "_remaining"] = periods - n_month - 1
+        new_entry = new_entry._replace(meta=dict(new_meta))
         new_entry = new_entry._replace(links=links)
         new_entry = new_entry._replace(
             date=entry.date + relativedelta(months=(1 + n_month))
