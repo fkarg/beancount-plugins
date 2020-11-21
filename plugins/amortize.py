@@ -30,7 +30,47 @@ from beancount.core.amount import Amount
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
-__plugins__ = ["amortize", "prepaid", "electronics"]
+__plugins__ = ["shared"]
+
+
+def shared(entries, unused_options_map):
+    """ Only iterate over all entries once, and call the corresponding
+    plugin-function for relevant metadata fields.
+    """
+    new_entries = []
+    errors = []
+
+    params = {
+        "amortize_months": {
+            "prepaid_acc": None,
+            "link_pre": "amortize",
+            "period_field": "amortize_months",
+        },
+        "prepaid_months": {
+            "prepaid_acc": "Assets:PrepaidExpenses",
+            "link_pre": "prepaid",
+            "period_field": "prepaid_months",
+        },
+        "lifetime_months": {
+            "prepaid_acc": "Assets:Electronics",
+            "link_pre": "electronic",
+            "period_field": "lifetime_months",
+        },
+    }
+
+    for entry in entries:
+        added = False
+        if isinstance(entry, Transaction):
+            for k in params.keys():
+                if k in entry.meta:
+                    new_entries.extend(prepaid_transactions(entry, **(params[k])))
+                    added = True
+                    break
+
+        if not added:
+            new_entries.append(entry)
+
+    return new_entries, errors
 
 
 def amortize(entries, unused_options_map):
