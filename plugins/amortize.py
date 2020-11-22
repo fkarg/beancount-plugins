@@ -277,6 +277,13 @@ def prepaid_transactions(entry, prepaid_acc, link_pre, period_field):
     new_meta = dict(entry.meta)
     del new_meta[period_field]
 
+    start_date = entry.date
+    for starting in ["arrived", "starting"]:
+        if starting in entry.meta:
+            start_date = entry.meta[starting]
+            del new_meta[starting]
+            break
+
     for (n_month, monthly_number) in enumerate(monthly_amounts):
         new_postings = []
         for posting in entry.postings:
@@ -303,7 +310,7 @@ def prepaid_transactions(entry, prepaid_acc, link_pre, period_field):
             narration="Depreciate: {}".format(entry.narration)
         )
         new_entry = new_entry._replace(
-            date=entry.date + relativedelta(months=(1 + n_month))
+            date=start_date + relativedelta(months=(1 + n_month))
         )
         # start depreciation one month later
         if new_entry.date <= date.today():
