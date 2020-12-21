@@ -45,6 +45,7 @@ Example:
         Liabilities:AccoutsPayable       100.00 USD
 """
 
+from datetime import date
 from dateutil.parser import parse
 
 from beancount.core import data, compare
@@ -71,10 +72,15 @@ def settlement_date(entries, options_map, config):
                         account=config
                     )
                     links = (
-                        set(entry.links).union([link]) if entry.links else set([link])
+                        set(entries[index].links).union([link]) if entries[index].links else set([link])
                     )
                     entries[index] = entry._replace(postings=postings)
                     entries[index] = entry._replace(links=links)
+
+                    # do not settle future dates yet
+                    if s_date >= date.today():
+                        config = save_config if save_config else config
+                        continue
 
                     new_posting = postings[p_index]
                     new_posting = new_posting._replace(meta=dict())
@@ -106,5 +112,5 @@ def settlement_date(entries, options_map, config):
                     )
 
                     config = save_config if save_config else config
-                    break
+                    # break # allow use of multiple 'settle'
     return entries, errors
