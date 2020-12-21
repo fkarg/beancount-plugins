@@ -204,21 +204,55 @@ Example:
 
     plugin "fava.plugins.settlement_date" "Assets:Savings:Transfer"
 
-    2017-04-01 * "" ""
+    2017-04-01 * "Doing some saving transfers"
         Assets:Savings:US       -100.00 USD
         Assets:Savings:JP
             settle: 2017-04-03
 
     ; becomes
 
-    2017-04-01 * "" "Doing some saving transfers" ^settle-43be1c
+    2017-04-01 * "Doing some saving transfers" ^settle-43be1c
         Assets:Savings:US       -100.00 USD
         Assets:Savings:Transfer
             settle: 2017-04-03
 
-    2017-04-03 * "" "Settle: Doing some saving transfers" ^settle-43be1c
+    2017-04-03 * "Settle: Doing some saving transfers" ^settle-43be1c
         Assets:Savings:Transfer -100.00 USD
         Assets:Savings:JP        100.00 USD
+
+
+    ; also; in case of settling negative parts later:
+    2017-04-01 * "Doing some saving transfers"
+        Assets:Savings:US               -100.00 USD
+            settle: 2017-04-03
+        Assets:Savings:JP
+
+    ; becomes
+
+    2017-04-01 * "Doing some saving transfers" ^settle-43be1c
+        Liabilities:AccountsPayable     -100.00 USD
+            settle: 2017-04-03
+        Assets:Savings:JP                100.00 USD
+
+    2017-04-03 * "Settle: Doing some saving transfers" ^settle-43be1c
+        Assets:Savings:US               -100.00 USD
+        Liabilities:AccoutsPayable       100.00 USD
+
+    ; make sure you have a `Liabilities:AccoutsPayable` account for that.
+
+
+    ; can also be combined, or used multiple times in one transaction:
+    2017-04-01 * "Bought some gifts, and stuff for someone else"
+        Assets:Checkings            -100 USD
+            settle: 2017-04-03
+        Assets:Checkings            -120 USD
+            settle: 2017-04-05
+        Assets:Voucher               -20 USD
+        Expenses:Gifts                70 USD
+        Assets:Checkings             170 USD
+            settle: 2017-04-20
+
+    ; will be split apart as expected, with a different link for each settlement.
 ```
 
 ## Plugin `settle_inv`
@@ -251,21 +285,4 @@ Example:
         Assets:Checkings        -100.00 EUR
         Assets:PayPal            100.00 EUR
 
-
-    ; also; in case of settling negative parts later:
-    2017-04-01 * "" ""
-        Assets:Savings:US               -100.00 USD
-            settle: 2017-04-03
-        Assets:Savings:JP
-
-    ; becomes
-
-    2017-04-01 * "" "Doing some saving transfers" ^settle-43be1c
-        Liabilities:AccountsPayable     -100.00 USD
-            settle: 2017-04-03
-        Assets:Savings:JP                100.00 USD
-
-    2017-04-03 * "" "Settle: Doing some saving transfers" ^settle-43be1c
-        Assets:Savings:US               -100.00 USD
-        Liabilities:AccoutsPayable       100.00 USD
 ```
